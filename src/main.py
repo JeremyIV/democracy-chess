@@ -15,6 +15,8 @@ from twitch import create_twitch_chat
 from voting.fptp import FPTPVoteParser
 from mock_twitch import MockTwitchChat
 from mock_stockfish import MockStockfish
+from game_logger import GameLogger
+from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
 
 def main():
     # Parse command line arguments
@@ -23,7 +25,13 @@ def main():
     parser.add_argument('--mock-chat-path', default='mock/chat.csv', help='Path to mock chat CSV file')
     parser.add_argument('--mock-stockfish-path', default='mock/stockfish.csv', help='Path to mock Stockfish CSV file')
     parser.add_argument('--vote-time', type=int, default=30, help='Seconds to wait for votes')
+    parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
+    parser.add_argument('--difficulty', type=int, choices=range(1, len(DIFFICULTY_LEVELS) + 1),
+                    default=5, help='Stockfish difficulty level (1-15)')
     args = parser.parse_args()
+
+    # Initialize logger
+    logger = GameLogger(args.log_dir)
 
     # Initialize pygame for display
     pygame.init()
@@ -36,11 +44,10 @@ def main():
     # Initialize either mock or real components
     if args.mock:
         twitch_chat = MockTwitchChat(args.mock_chat_path)
-        engine = MockStockfish(args.mock_stockfish_path)
     else:
-        # For real games, we'll use actual Stockfish and Twitch
         twitch_chat = create_twitch_chat()
-        engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+
+    engine = create_engine(args.mock, args.mock_stockfish_path, args.difficulty)
 
     # Initialize vote parser
     vote_parser = FPTPVoteParser(board)
@@ -57,25 +64,20 @@ def main():
         pygame.display.flip()
 
     try:
+        turn_number = 1
         while not board.is_game_over():
-            # Display current board state
             render_board()
 
-            print(f"\nWaiting {args.vote_time} seconds for votes...")
+            print(f"\nTurn {turn_number} - Waiting {args.vote_time} seconds for votes...")
             vote_start_time = time.time()
 
-            # Keep processing events while waiting for votes
             while time.time() - vote_start_time < args.vote_time:
-                # Handle pygame events
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         raise KeyboardInterrupt
-                
-                # Update display to keep window responsive
                 pygame.display.flip()
-                time.sleep(0.1)  # Short sleep to prevent high CPU usage
+                time.sleep(0.1)
 
-            # Get chat messages from the voting period
             chat_messages = twitch_chat.get_chat()
             
             if not chat_messages:
@@ -83,14 +85,11 @@ def main():
                 continue
 
             try:
-                # Parse votes and get winning move
                 winning_move = vote_parser.get_winning_move(chat_messages)
-                
-                # Print voting results
                 print(f"\nVotes received from {len(chat_messages)} users")
                 print(f"Winning move: {winning_move.uci()}")
 
-                # Make the winning move
+                # Make Twitch's move
                 board.push(winning_move)
                 render_board()
 
@@ -99,19 +98,33 @@ def main():
                 board.push(result.move)
                 print(f"Stockfish played: {result.move.uci()}")
 
+                # Log the complete turn
+                logger.log_turn(
+                    turn_number=turn_number,
+                    chat_messages=chat_messages,
+                    twitch_move=winning_move.uci(),
+                    stockfish_move=result.move.uci()
+                )
+                turn_number += 1
+
             except ValueError as e:
                 print(f"Error processing votes: {e}")
                 continue
 
         # Game is over
         render_board()
+        outcome = board.outcome()
+        logger.log_outcome(outcome)
+        
         print("\nGame Over!")
-        print(f"Result: {board.outcome().result()}")
+        winner = "Twitch" if outcome.winner else "Stockfish" if outcome.winner is False else "Draw"
+        print(f"Winner: {winner}")
+        print(f"Termination: {outcome.termination.name}")
+        print(f"Game log saved to: {logger.log_file}")
 
     except KeyboardInterrupt:
         print("\nGame terminated by user")
     finally:
-        # Clean up
         engine.quit()
         pygame.quit()
         sys.exit()

@@ -9,7 +9,10 @@ class MockStockfish:
         self.moves = pd.read_csv(csv_path)['move'].tolist()
         # Keep track of which move we're on
         self.current_move_index = 0
-        
+    
+    def set_difficulty(self, difficulty: int):
+        pass
+    
     def play(self, board: chess.Board, limit: Optional[object] = None) -> 'MockResult':
         """
         Mock the stockfish play() method. Returns a MockResult object
