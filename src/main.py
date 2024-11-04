@@ -17,6 +17,7 @@ from twitch import create_twitch_chat
 from voting.fptp import FPTPVoteParser
 from voting.approval import ApprovalVoteParser
 from voting.runoff import InstantRunoffVoteParser
+from voting.quadratic import QuadraticVoteParser
 from mock_twitch import MockTwitchChat
 from mock_stockfish import MockStockfish
 from game_logger import GameLogger, get_last_game_info
@@ -26,7 +27,8 @@ from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
 VOTING_METHODS = {
     'fptp': FPTPVoteParser,
     'approval': ApprovalVoteParser,
-    'runoff': InstantRunoffVoteParser
+    'runoff': InstantRunoffVoteParser,
+    'quadratic': QuadraticVoteParser
 }
 
 VotingMethod = Literal['fptp', 'approval', 'runoff']
