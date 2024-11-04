@@ -89,18 +89,54 @@ class VoteParser(ABC):
         votes = self.parse_all_votes(comments)
         return self.resolve_votes(votes.values())
 
+    def parse_move(self, move_str: str) -> chess.Move:
+        """
+        Try to parse a move string in either UCI or algebraic notation.
+        
+        Args:
+            move_str: String representation of a move (e.g., "e2e4" or "e4" or "Nf3")
+            
+        Returns:
+            chess.Move object representing the move
+            
+        Raises:
+            ValueError: If the string cannot be parsed into a valid move
+        """
+        # Strip whitespace and standardize format
+        clean_move = move_str.strip()
+        
+        # Try parsing as UCI notation first
+        try:
+            move = chess.Move.from_uci(clean_move)
+            if move in self.board.legal_moves:
+                return move
+        except ValueError:
+            pass
+        
+        # If UCI parsing fails, try algebraic notation
+        try:
+            move = self.board.parse_san(clean_move)
+            if move in self.board.legal_moves:
+                return move
+        except ValueError:
+            pass
+            
+        # If we get here, neither parsing attempt worked
+        raise ValueError(f"Could not parse move: {move_str}")
+
     def is_valid_move(self, move_str: str) -> bool:
         """
         Check if a move string represents a valid move in the current position.
+        Accepts both UCI and algebraic notation.
         
         Args:
-            move_str: String representation of a move (e.g., "e2e4")
+            move_str: String representation of a move (e.g., "e2e4" or "e4" or "Nf3")
             
         Returns:
             True if the move is valid, False otherwise
         """
         try:
-            move = chess.Move.from_uci(move_str)
-            return move in self.board.legal_moves
+            self.parse_move(move_str)
+            return True
         except ValueError:
             return False

@@ -18,22 +18,16 @@ class FPTPVoteParser(VoteParser):
         Raises:
             ValueError: If the comment cannot be parsed into a valid move
         """
-        # Strip whitespace and convert to lowercase
-        clean_comment = comment.strip().lower()
+                # Strip whitespace and standardize format
+        clean_comment = comment.strip()
         
         # If the comment contains spaces or multiple moves, it's invalid
         if ' ' in clean_comment or ',' in clean_comment:
             raise ValueError(f"FPTP vote must be a single move, got: {comment}")
-            
-        # Try to parse as UCI move
-        try:
-            move = chess.Move.from_uci(clean_comment)
-            if move in self.board.legal_moves:
-                return move
-            else:
-                raise ValueError(f"Illegal move: {clean_comment}")
-        except ValueError:
-            raise ValueError(f"Could not parse move: {clean_comment}")
+        
+        # Try to parse the move
+        return self.parse_move(clean_comment)
+
 
     def resolve_votes(self, votes: Iterable[chess.Move]) -> chess.Move:
         """
