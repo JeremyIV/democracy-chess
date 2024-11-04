@@ -8,7 +8,7 @@ import io
 from PIL import Image
 import time
 import sys
-from typing import Union
+from typing import Union, Optional
 
 # Import our modules
 from twitch import create_twitch_chat
@@ -18,36 +18,42 @@ from mock_stockfish import MockStockfish
 from game_logger import GameLogger
 from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
 
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Democracy Chess - Chess played by Twitch chat')
-    parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
-    parser.add_argument('--mock-chat-path', default='mock/chat.csv', help='Path to mock chat CSV file')
-    parser.add_argument('--mock-stockfish-path', default='mock/stockfish.csv', help='Path to mock Stockfish CSV file')
-    parser.add_argument('--vote-time', type=int, default=30, help='Seconds to wait for votes')
-    parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
-    parser.add_argument('--difficulty', type=int, choices=range(1, len(DIFFICULTY_LEVELS) + 1),
-                    default=5, help='Stockfish difficulty level (1-15)')
-    args = parser.parse_args()
-
+def play_game(
+    screen: pygame.Surface,
+    mock: bool,
+    mock_chat_path: str,
+    mock_stockfish_path: str,
+    vote_time: int,
+    log_dir: str,
+    difficulty: int,
+    game_number: int
+) -> None:
+    """
+    Play a single game of Democracy Chess.
+    
+    Args:
+        screen: Pygame surface to render the game on
+        mock: Whether to use mock implementations
+        mock_chat_path: Path to mock chat CSV file
+        mock_stockfish_path: Path to mock Stockfish CSV file
+        vote_time: Seconds to wait for votes
+        log_dir: Directory to store game logs
+        difficulty: Stockfish difficulty level (1-15)
+        game_number: The sequential number of this game
+    """
     # Initialize logger
-    logger = GameLogger(args.log_dir)
-
-    # Initialize pygame for display
-    pygame.init()
-    screen = pygame.display.set_mode((800, 800))
-    pygame.display.set_caption("Democracy Chess")
+    logger = GameLogger(log_dir, game_number)
 
     # Initialize chess board
     board = chess.Board()
 
     # Initialize either mock or real components
-    if args.mock:
-        twitch_chat = MockTwitchChat(args.mock_chat_path)
+    if mock:
+        twitch_chat = MockTwitchChat(mock_chat_path)
     else:
         twitch_chat = create_twitch_chat()
 
-    engine = create_engine(args.mock, args.mock_stockfish_path, args.difficulty)
+    engine = create_engine(mock, mock_stockfish_path, difficulty)
 
     # Initialize vote parser
     vote_parser = FPTPVoteParser(board)
@@ -68,10 +74,10 @@ def main():
         while not board.is_game_over():
             render_board()
 
-            print(f"\nTurn {turn_number} - Waiting {args.vote_time} seconds for votes...")
+            print(f"\nGame {game_number}, Turn {turn_number} - Waiting {vote_time} seconds for votes...")
             vote_start_time = time.time()
 
-            while time.time() - vote_start_time < args.vote_time:
+            while time.time() - vote_start_time < vote_time:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         raise KeyboardInterrupt
@@ -122,10 +128,55 @@ def main():
         print(f"Termination: {outcome.termination.name}")
         print(f"Game log saved to: {logger.log_file}")
 
-    except KeyboardInterrupt:
-        print("\nGame terminated by user")
     finally:
         engine.quit()
+
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Democracy Chess - Chess played by Twitch chat')
+    parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
+    parser.add_argument('--mock-chat-path', default='mock/chat.csv', help='Path to mock chat CSV file')
+    parser.add_argument('--mock-stockfish-path', default='mock/stockfish.csv', help='Path to mock Stockfish CSV file')
+    parser.add_argument('--vote-time', type=int, default=30, help='Seconds to wait for votes')
+    parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
+    parser.add_argument('--difficulty', type=int, choices=range(1, len(DIFFICULTY_LEVELS) + 1),
+                    default=5, help='Stockfish difficulty level (1-15)')
+    args = parser.parse_args()
+
+    # Initialize pygame
+    pygame.init()
+    screen = pygame.display.set_mode((800, 800))
+    pygame.display.set_caption("Democracy Chess")
+
+    try:
+        game_number = 1
+        while True:
+            try:
+                play_game(
+                    screen=screen,
+                    mock=args.mock,
+                    mock_chat_path=args.mock_chat_path,
+                    mock_stockfish_path=args.mock_stockfish_path,
+                    vote_time=args.vote_time,
+                    log_dir=args.log_dir,
+                    difficulty=args.difficulty,
+                    game_number=game_number
+                )
+                game_number += 1
+                print(f"\nStarting game {game_number}...")
+                time.sleep(5)  # Brief pause between games
+                
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                print(f"Error during game {game_number}: {e}")
+                print("Starting new game...")
+                time.sleep(5)
+                continue
+
+    except KeyboardInterrupt:
+        print("\nProgram terminated by user")
+    finally:
         pygame.quit()
         sys.exit()
 
