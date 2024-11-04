@@ -102,8 +102,8 @@ Result: e4 wins with 2 votes
 
 4. **Quadratic Voting Example:**
 ```
-User1: e4 5 d4 2  (strongly prefers e4)
-User2: d4 3       (moderately supports d4)
+User1: e4 2 d4 1  (prefers e4)
+User2: d4       (strongly supports d4)
 User3: e4 4 Nf3 1 (strongly prefers e4, slight support for Nf3)
 Result: votes are normalized and e4 wins with the highest weighted support
 ```
@@ -113,4 +113,4 @@ Result: votes are normalized and e4 wins with the highest weighted support
 - Invalid moves are ignored, but the rest of your vote still counts
 - The vote tally happens every 30 seconds
 - Watch the stream title to know which voting system is being used
-- The chess engine will respond a few seconds after our move is played
+- The chess engine will respond a few seconds after the chat's move is played

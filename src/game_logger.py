@@ -1,8 +1,9 @@
 import os
 import json
 from datetime import datetime
-from typing import List, Tuple, Literal
+from typing import List, Tuple, Literal, Optional
 import chess
+import glob
 
 VotingMethod = Literal['fptp', 'approval', 'runoff']
 
@@ -80,3 +81,43 @@ class GameLogger:
         """Save the current game data to file"""
         with open(self.log_file, 'w') as f:
             json.dump(self.game_data, f, indent=2)
+
+def get_last_game_info(log_dir: str, voting_method: VotingMethod) -> Optional[Tuple[int, bool]]:
+    """
+    Find the most recent game with the given voting method and return its difficulty and outcome.
+    
+    Args:
+        log_dir: Directory containing game logs
+        voting_method: The voting method to look for
+        
+    Returns:
+        Tuple of (difficulty_level, chat_won) or None if no previous games found
+        where chat_won is True if Twitch chat won, False if they lost/drew
+    """
+    # Get all json files in the log directory
+    log_files = glob.glob(os.path.join(log_dir, "game_*.json"))
+    
+    if not log_files:
+        return None
+        
+    # Sort by modification time, newest first
+    log_files.sort(key=os.path.getmtime, reverse=True)
+    
+    # Look through files to find the most recent game with this voting method
+    for log_file in log_files:
+        try:
+            with open(log_file, 'r') as f:
+                game_data = json.load(f)
+                
+            if game_data.get('voting_method') == voting_method:
+                difficulty = game_data.get('stockfish_difficulty')
+                outcome = game_data.get('outcome', {})
+                # Consider only a clear Twitch victory as a win
+                chat_won = outcome.get('winner') == 'Twitch'
+                
+                return difficulty, chat_won
+                
+        except (json.JSONDecodeError, KeyError):
+            continue
+            
+    return None

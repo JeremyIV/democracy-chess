@@ -8,7 +8,8 @@ import io
 from PIL import Image
 import time
 import sys
-from typing import Union, Optional, Literal
+from typing import Union, Optional, Literal, Tuple
+import random
 
 # Import our modules
 from twitch import create_twitch_chat
@@ -17,7 +18,7 @@ from voting.approval import ApprovalVoteParser
 from voting.runoff import InstantRunoffVoteParser
 from mock_twitch import MockTwitchChat
 from mock_stockfish import MockStockfish
-from game_logger import GameLogger
+from game_logger import GameLogger, get_last_game_info
 from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
 
 # Define valid voting methods
@@ -28,6 +29,38 @@ VOTING_METHODS = {
 }
 
 VotingMethod = Literal['fptp', 'approval', 'runoff']
+
+def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
+    """
+    Determine the voting method and difficulty for the next game based on history.
+    
+    Args:
+        log_dir: Directory containing game logs
+        
+    Returns:
+        Tuple of (voting_method, difficulty_level)
+    """
+    # Randomly choose next voting method
+    voting_method = random.choice(list(VOTING_METHODS.keys()))
+    
+    # Get info about the last game with this voting method
+    last_game_info = get_last_game_info(log_dir, voting_method)
+    
+    if last_game_info is None:
+        # No previous games with this method, start at default difficulty
+        return voting_method, 5
+    
+    last_difficulty, chat_won = last_game_info
+    
+    # Adjust difficulty based on outcome
+    if chat_won:
+        # Increase difficulty, but don't exceed maximum
+        new_difficulty = min(last_difficulty + 1, len(DIFFICULTY_LEVELS))
+    else:
+        # Decrease difficulty, but don't go below 1
+        new_difficulty = max(last_difficulty - 1, 1)
+        
+    return voting_method, new_difficulty
 
 def play_game(
     screen: pygame.Surface,
@@ -156,23 +189,26 @@ def main():
     parser.add_argument('--mock-stockfish-path', default='mock/stockfish.csv', help='Path to mock Stockfish CSV file')
     parser.add_argument('--vote-time', type=int, default=30, help='Seconds to wait for votes')
     parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
-    parser.add_argument('--difficulty', type=int, choices=range(1, len(DIFFICULTY_LEVELS) + 1),
-                    default=5, help='Stockfish difficulty level (1-15)')
-    parser.add_argument('--voting-method', 
-                    choices=list(VOTING_METHODS.keys()),
-                    default='fptp',
-                    help='Voting method to use (default: fptp)')
     args = parser.parse_args()
 
     # Initialize pygame
     pygame.init()
     screen = pygame.display.set_mode((800, 800))
-    pygame.display.set_caption(f"Democracy Chess - {args.voting_method.upper()} Voting")
 
     try:
         game_number = 1
         while True:
             try:
+                # Determine parameters for next game
+                voting_method, difficulty = determine_next_game_params(args.log_dir)
+                
+                # Update window title with new voting method
+                pygame.display.set_caption(f"Democracy Chess - {voting_method.upper()} Voting (Difficulty {difficulty})")
+                
+                print(f"\nStarting game {game_number}")
+                print(f"Voting method: {voting_method.upper()}")
+                print(f"Difficulty level: {difficulty}")
+                
                 play_game(
                     screen=screen,
                     mock=args.mock,
@@ -180,12 +216,13 @@ def main():
                     mock_stockfish_path=args.mock_stockfish_path,
                     vote_time=args.vote_time,
                     log_dir=args.log_dir,
-                    difficulty=args.difficulty,
+                    difficulty=difficulty,
                     game_number=game_number,
-                    voting_method=args.voting_method
+                    voting_method=voting_method
                 )
+                
                 game_number += 1
-                print(f"\nStarting game {game_number}...")
+                print("\nPreparing next game...")
                 time.sleep(5)  # Brief pause between games
                 
             except KeyboardInterrupt:
