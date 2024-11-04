@@ -1,4 +1,4 @@
-# How to Play Democracy Chess
+# How to Play 🏛️ Democracy Chess ♟️
 
 Democracy Chess is a collaborative chess game where Twitch chat plays against a chess engine. Every 30 seconds, all votes are tallied and the most popular legal move is played.
 

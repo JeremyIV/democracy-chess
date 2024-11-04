@@ -10,6 +10,7 @@ import time
 import sys
 from typing import Union, Optional, Literal, Tuple
 import random
+import traceback  
 
 # Import our modules
 from twitch import create_twitch_chat
@@ -48,7 +49,7 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
     
     if last_game_info is None:
         # No previous games with this method, start at default difficulty
-        return voting_method, 5
+        return voting_method, 2
     
     last_difficulty, chat_won = last_game_info
     
@@ -61,6 +62,61 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
         new_difficulty = max(last_difficulty - 1, 1)
         
     return voting_method, new_difficulty
+def render_game_state(
+    screen: pygame.Surface,
+    board: chess.Board,
+    time_remaining: float,
+    vote_time: int,
+    voting_method: str
+) -> None:
+    """
+    Render the current game state including chess board and timer.
+    
+    Args:
+        screen: Pygame surface to render on
+        board: Current chess board state
+        time_remaining: Seconds remaining in current vote
+        vote_time: Total voting time per turn
+        voting_method: Current voting method being used
+    """
+    # Clear screen
+    screen.fill((255, 255, 255))
+    
+    # Render chess board
+    svg_data = chess.svg.board(board=board).encode('UTF-8')
+    png_data = cairosvg.svg2png(bytestring=svg_data)
+    image = Image.open(io.BytesIO(png_data))
+    py_image = pygame.image.fromstring(image.tobytes(), image.size, image.mode)
+    py_image = pygame.transform.scale(py_image, (800, 800))
+    screen.blit(py_image, (0, 0))
+    
+    # Render timer and info panel
+    font = pygame.font.Font(None, 48)
+    
+    # Timer
+    time_text = font.render(f"Next Move: {int(time_remaining)}", True, (0, 0, 0))
+    screen.blit(time_text, (820, 50))
+    
+    # Progress bar
+    progress_height = 20
+    progress_width = 200
+    progress_x = 820
+    progress_y = 100
+    
+    # Draw progress bar background
+    pygame.draw.rect(screen, (200, 200, 200), (progress_x, progress_y, progress_width, progress_height))
+    
+    # Draw progress bar fill
+    fill_width = int((time_remaining / vote_time) * progress_width)
+    pygame.draw.rect(screen, (0, 255, 0), (progress_x, progress_y, fill_width, progress_height))
+    
+    # Voting method info
+    method_label = font.render("Voting:", True, (0, 0, 0))
+    method_text = font.render(voting_method.upper(), True, (0, 0, 0))
+    screen.blit(method_label, (820, 150))
+    screen.blit(method_text, (820, 200))
+    
+    pygame.display.flip()
 
 def play_game(
     screen: pygame.Surface,
@@ -71,95 +127,89 @@ def play_game(
     log_dir: str,
     difficulty: int,
     game_number: int,
-    voting_method: VotingMethod
+    voting_method: VotingMethod,
+    twitch_chat=None
 ) -> None:
     """
     Play a single game of Democracy Chess.
     
     Args:
-        screen: Pygame surface to render the game on
-        mock: Whether to use mock implementations
-        mock_chat_path: Path to mock chat CSV file
-        mock_stockfish_path: Path to mock Stockfish CSV file
-        vote_time: Seconds to wait for votes
-        log_dir: Directory to store game logs
-        difficulty: Stockfish difficulty level (1-15)
-        game_number: The sequential number of this game
-        voting_method: Which voting method to use ('fptp', 'approval', or 'runoff')
+        [Previous args documentation remains the same...]
     """
-    # Initialize logger
     logger = GameLogger(log_dir, game_number, voting_method, difficulty)
-
-    # Initialize chess board
     board = chess.Board()
-
-    # Initialize either mock or real components
-    if mock:
-        twitch_chat = MockTwitchChat(mock_chat_path)
-    else:
-        twitch_chat = create_twitch_chat()
-
     engine = create_engine(mock, mock_stockfish_path, difficulty)
-
-    # Initialize vote parser based on selected method
     VoteParserClass = VOTING_METHODS[voting_method]
     vote_parser = VoteParserClass(board)
-
-    def render_board():
-        """Convert chess.svg board to pygame surface and display it"""
-        svg_data = chess.svg.board(board=board).encode('UTF-8')
-        png_data = cairosvg.svg2png(bytestring=svg_data)
-        image = Image.open(io.BytesIO(png_data))
-        py_image = pygame.image.fromstring(image.tobytes(), image.size, image.mode)
-        py_image = pygame.transform.scale(py_image, (800, 800))
-        screen.fill((255, 255, 255))
-        screen.blit(py_image, (0, 0))
-        pygame.display.flip()
 
     try:
         turn_number = 1
         print(f"\nStarting game {game_number} with {voting_method.upper()} voting")
         
         while not board.is_game_over():
-            render_board()
-
             print(f"\nGame {game_number}, Turn {turn_number} - Waiting {vote_time} seconds for votes...")
             print(f"Voting method: {voting_method.upper()}")
+            
             vote_start_time = time.time()
-
-            while time.time() - vote_start_time < vote_time:
+            collected_messages = []
+            
+            # Voting period loop
+            while True:
+                current_time = time.time()
+                elapsed_time = current_time - vote_start_time
+                
+                if elapsed_time >= vote_time:
+                    break
+                    
+                time_remaining = vote_time - elapsed_time
+                
+                # Handle events
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         raise KeyboardInterrupt
-                pygame.display.flip()
+                
+                # Collect any new messages
+                new_messages = twitch_chat.get_chat()
+                if new_messages:
+                    collected_messages.extend(new_messages)
+                
+                # Render current state
+                render_game_state(
+                    screen=screen,
+                    board=board,
+                    time_remaining=time_remaining,
+                    vote_time=vote_time,
+                    voting_method=voting_method
+                )
+                
+                # Small sleep to prevent excessive CPU usage
                 time.sleep(0.1)
-
-            chat_messages = twitch_chat.get_chat()
             
-            if not chat_messages:
+            if not collected_messages:
                 print("No votes received in this period, continuing...")
                 continue
 
             try:
-                winning_move = vote_parser.get_winning_move(chat_messages)
-                print(f"\nVotes received from {len(chat_messages)} users")
+                winning_move = vote_parser.get_winning_move(collected_messages)
+                print(f"\nVotes received from {len(collected_messages)} users")
                 print(f"Winning move: {winning_move.uci()}")
 
                 # Make Twitch's move
                 board.push(winning_move)
-                render_board()
+                render_game_state(screen, board, 0, vote_time, voting_method)
 
                 # Get and make Stockfish's move
-                result = engine.play(board, chess.engine.Limit(time=2.0))
-                board.push(result.move)
-                print(f"Stockfish played: {result.move.uci()}")
+                result = engine.play(board)
+                board.push(result)
+                print(f"Stockfish played: {result.uci()}")
+                render_game_state(screen, board, vote_time, vote_time, voting_method)
 
                 # Log the complete turn
                 logger.log_turn(
                     turn_number=turn_number,
-                    chat_messages=chat_messages,
+                    chat_messages=collected_messages,
                     twitch_move=winning_move.uci(),
-                    stockfish_move=result.move.uci()
+                    stockfish_move=result.uci()
                 )
                 turn_number += 1
 
@@ -168,7 +218,7 @@ def play_game(
                 continue
 
         # Game is over
-        render_board()
+        render_game_state(screen, board, 0, vote_time, voting_method)
         outcome = board.outcome()
         logger.log_outcome(outcome)
         
@@ -182,7 +232,6 @@ def play_game(
         engine.quit()
 
 def main():
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description='Democracy Chess - Chess played by Twitch chat')
     parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
     parser.add_argument('--mock-chat-path', default='mock/chat.csv', help='Path to mock chat CSV file')
@@ -191,18 +240,20 @@ def main():
     parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
     args = parser.parse_args()
 
-    # Initialize pygame
+    if args.mock:
+        twitch_chat = MockTwitchChat(mock_chat_path)
+    else:
+        twitch_chat = create_twitch_chat()
+
     pygame.init()
-    screen = pygame.display.set_mode((800, 800))
+    # Increased window width to accommodate timer and info panel
+    screen = pygame.display.set_mode((1100, 800))
 
     try:
         game_number = 1
         while True:
             try:
-                # Determine parameters for next game
                 voting_method, difficulty = determine_next_game_params(args.log_dir)
-                
-                # Update window title with new voting method
                 pygame.display.set_caption(f"Democracy Chess - {voting_method.upper()} Voting (Difficulty {difficulty})")
                 
                 print(f"\nStarting game {game_number}")
@@ -218,17 +269,19 @@ def main():
                     log_dir=args.log_dir,
                     difficulty=difficulty,
                     game_number=game_number,
-                    voting_method=voting_method
+                    voting_method=voting_method,
+                    twitch_chat=twitch_chat
                 )
                 
                 game_number += 1
                 print("\nPreparing next game...")
-                time.sleep(5)  # Brief pause between games
+                time.sleep(5)
                 
             except KeyboardInterrupt:
                 raise
             except Exception as e:
                 print(f"Error during game {game_number}: {e}")
+                traceback.print_exc()
                 print("Starting new game...")
                 time.sleep(5)
                 continue
