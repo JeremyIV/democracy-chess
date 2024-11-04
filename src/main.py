@@ -8,15 +8,26 @@ import io
 from PIL import Image
 import time
 import sys
-from typing import Union, Optional
+from typing import Union, Optional, Literal
 
 # Import our modules
 from twitch import create_twitch_chat
 from voting.fptp import FPTPVoteParser
+from voting.approval import ApprovalVoteParser
+from voting.runoff import InstantRunoffVoteParser
 from mock_twitch import MockTwitchChat
 from mock_stockfish import MockStockfish
 from game_logger import GameLogger
 from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
+
+# Define valid voting methods
+VOTING_METHODS = {
+    'fptp': FPTPVoteParser,
+    'approval': ApprovalVoteParser,
+    'runoff': InstantRunoffVoteParser
+}
+
+VotingMethod = Literal['fptp', 'approval', 'runoff']
 
 def play_game(
     screen: pygame.Surface,
@@ -26,7 +37,8 @@ def play_game(
     vote_time: int,
     log_dir: str,
     difficulty: int,
-    game_number: int
+    game_number: int,
+    voting_method: VotingMethod
 ) -> None:
     """
     Play a single game of Democracy Chess.
@@ -40,6 +52,7 @@ def play_game(
         log_dir: Directory to store game logs
         difficulty: Stockfish difficulty level (1-15)
         game_number: The sequential number of this game
+        voting_method: Which voting method to use ('fptp', 'approval', or 'runoff')
     """
     # Initialize logger
     logger = GameLogger(log_dir, game_number)
@@ -55,8 +68,9 @@ def play_game(
 
     engine = create_engine(mock, mock_stockfish_path, difficulty)
 
-    # Initialize vote parser
-    vote_parser = FPTPVoteParser(board)
+    # Initialize vote parser based on selected method
+    VoteParserClass = VOTING_METHODS[voting_method]
+    vote_parser = VoteParserClass(board)
 
     def render_board():
         """Convert chess.svg board to pygame surface and display it"""
@@ -71,10 +85,13 @@ def play_game(
 
     try:
         turn_number = 1
+        print(f"\nStarting game {game_number} with {voting_method.upper()} voting")
+        
         while not board.is_game_over():
             render_board()
 
             print(f"\nGame {game_number}, Turn {turn_number} - Waiting {vote_time} seconds for votes...")
+            print(f"Voting method: {voting_method.upper()}")
             vote_start_time = time.time()
 
             while time.time() - vote_start_time < vote_time:
@@ -141,12 +158,16 @@ def main():
     parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
     parser.add_argument('--difficulty', type=int, choices=range(1, len(DIFFICULTY_LEVELS) + 1),
                     default=5, help='Stockfish difficulty level (1-15)')
+    parser.add_argument('--voting-method', 
+                    choices=list(VOTING_METHODS.keys()),
+                    default='fptp',
+                    help='Voting method to use (default: fptp)')
     args = parser.parse_args()
 
     # Initialize pygame
     pygame.init()
     screen = pygame.display.set_mode((800, 800))
-    pygame.display.set_caption("Democracy Chess")
+    pygame.display.set_caption(f"Democracy Chess - {args.voting_method.upper()} Voting")
 
     try:
         game_number = 1
@@ -160,7 +181,8 @@ def main():
                     vote_time=args.vote_time,
                     log_dir=args.log_dir,
                     difficulty=args.difficulty,
-                    game_number=game_number
+                    game_number=game_number,
+                    voting_method=args.voting_method
                 )
                 game_number += 1
                 print(f"\nStarting game {game_number}...")
