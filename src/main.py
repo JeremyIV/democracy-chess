@@ -55,7 +55,7 @@ def play_game(
         voting_method: Which voting method to use ('fptp', 'approval', or 'runoff')
     """
     # Initialize logger
-    logger = GameLogger(log_dir, game_number)
+    logger = GameLogger(log_dir, game_number, voting_method, difficulty)
 
     # Initialize chess board
     board = chess.Board()
