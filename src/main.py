@@ -62,12 +62,15 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
         new_difficulty = max(last_difficulty - 1, 1)
         
     return voting_method, new_difficulty
+
 def render_game_state(
     screen: pygame.Surface,
     board: chess.Board,
     time_remaining: float,
     vote_time: int,
-    voting_method: str
+    voting_method: str,
+    difficulty: int,
+    last_move: Optional[chess.Move] = None
 ) -> None:
     """
     Render the current game state including chess board and timer.
@@ -78,12 +81,14 @@ def render_game_state(
         time_remaining: Seconds remaining in current vote
         vote_time: Total voting time per turn
         voting_method: Current voting method being used
+        difficulty: Current difficulty level
+        last_move: The last move made on the board (optional)
     """
     # Clear screen
     screen.fill((255, 255, 255))
     
     # Render chess board
-    svg_data = chess.svg.board(board=board).encode('UTF-8')
+    svg_data = chess.svg.board(board=board, lastmove=last_move).encode('UTF-8')
     png_data = cairosvg.svg2png(bytestring=svg_data)
     image = Image.open(io.BytesIO(png_data))
     py_image = pygame.image.fromstring(image.tobytes(), image.size, image.mode)
@@ -113,8 +118,15 @@ def render_game_state(
     # Voting method info
     method_label = font.render("Voting:", True, (0, 0, 0))
     method_text = font.render(voting_method.upper(), True, (0, 0, 0))
-    screen.blit(method_label, (820, 150))
-    screen.blit(method_text, (820, 200))
+    screen.blit(method_label, (820, 200))
+    screen.blit(method_text, (820, 250))
+
+    # Difficuly level
+    difficulty_name = DIFFICULTY_LEVELS[difficulty].name
+    method_label = font.render(f"Difficulty: {difficulty}", True, (0, 0, 0))
+    method_text = font.render(difficulty_name, True, (0, 0, 0))
+    screen.blit(method_label, (820, 350))
+    screen.blit(method_text, (820, 400))
     
     pygame.display.flip()
 
@@ -141,6 +153,8 @@ def play_game(
     engine = create_engine(mock, mock_stockfish_path, difficulty)
     VoteParserClass = VOTING_METHODS[voting_method]
     vote_parser = VoteParserClass(board)
+
+    last_move = None  # Track the last move
 
     try:
         turn_number = 1
@@ -179,7 +193,9 @@ def play_game(
                     board=board,
                     time_remaining=time_remaining,
                     vote_time=vote_time,
-                    voting_method=voting_method
+                    voting_method=voting_method,
+                    difficulty=difficulty,
+                    last_move=last_move
                 )
                 
                 # Small sleep to prevent excessive CPU usage
@@ -196,13 +212,15 @@ def play_game(
 
                 # Make Twitch's move
                 board.push(winning_move)
-                render_game_state(screen, board, 0, vote_time, voting_method)
+                last_move = winning_move  # Update last move
+                render_game_state(screen, board, 0, vote_time, voting_method, difficulty, last_move)
 
                 # Get and make Stockfish's move
                 result = engine.play(board)
                 board.push(result)
+                last_move = result
                 print(f"Stockfish played: {result.uci()}")
-                render_game_state(screen, board, vote_time, vote_time, voting_method)
+                render_game_state(screen, board, vote_time, vote_time, voting_method, difficulty, last_move)
 
                 # Log the complete turn
                 logger.log_turn(
@@ -218,7 +236,7 @@ def play_game(
                 continue
 
         # Game is over
-        render_game_state(screen, board, 0, vote_time, voting_method)
+        render_game_state(screen, board, 0, vote_time, voting_method, difficulty, last_move)
         outcome = board.outcome()
         logger.log_outcome(outcome)
         
