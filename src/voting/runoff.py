@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import chess
 from collections import Counter, defaultdict
 from .vote_parser import VoteParser
@@ -162,3 +162,41 @@ class InstantRunoffVoteParser(VoteParser):
             round_num += 1
         
         return results
+    
+    def get_colored_moves(self, votes: List[List[chess.Move]]) -> List[Tuple[chess.Move, str]]:
+        """
+        Generate colored arrows based only on first-choice votes.
+        Opacity scales with the proportion of voters who ranked each move first.
+        
+        Args:
+            votes: List of ordered lists of chess.Move objects representing rankings
+            
+        Returns:
+            List of tuples containing moves and their color codes. Colors are red
+            with opacity proportional to first-choice votes received.
+        """
+        if not votes:
+            return []
+        
+        # Count first choices only
+        first_choices = [vote[0] for vote in votes if vote]  # Skip empty votes
+        if not first_choices:
+            return []
+            
+        vote_counts = Counter(first_choices)
+        total_votes = len(first_choices)
+        
+        # Base color for arrows
+        base_color = "#882020"
+        
+        # Create move-color pairs
+        colored_moves = []
+        for move, count in vote_counts.items():
+            # Calculate opacity based on proportion of first-choice votes
+            opacity = int(255 * (count / total_votes))
+            hex_opacity = f"{opacity:02x}"
+            
+            color = f"{base_color}{hex_opacity}"
+            colored_moves.append((move, color))
+        
+        return colored_moves

@@ -8,9 +8,10 @@ import io
 from PIL import Image
 import time
 import sys
-from typing import Union, Optional, Literal, Tuple
+from typing import Union, Optional, Literal, Tuple, List
 import random
 import traceback  
+from colors_dict import ChessColors
 
 # Import our modules
 from twitch import create_twitch_chat
@@ -44,8 +45,8 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
         Tuple of (voting_method, difficulty_level)
     """
     # Randomly choose next voting method
-    voting_method = random.choice(list(VOTING_METHODS.keys()))
-    
+    voting_method = random.choice(list(VOTING_METHODS.keys())) # TODO uncomment
+
     # Get info about the last game with this voting method
     last_game_info = get_last_game_info(log_dir, voting_method)
     
@@ -72,7 +73,8 @@ def render_game_state(
     vote_time: int,
     voting_method: str,
     difficulty: int,
-    last_move: Optional[chess.Move] = None
+    last_move: Optional[chess.Move] = None,
+    colored_moves: Optional[List[Tuple[chess.Move, str]]] = None,
 ) -> None:
     """
     Render the current game state including chess board and timer.
@@ -85,12 +87,30 @@ def render_game_state(
         voting_method: Current voting method being used
         difficulty: Current difficulty level
         last_move: The last move made on the board (optional)
+        colored_moves: List of (Move, color_code) tuples, where color_code is like "#00308880"
     """
     # Clear screen
     screen.fill((255, 255, 255))
     
-    # Render chess board
-    svg_data = chess.svg.board(board=board, lastmove=last_move).encode('UTF-8')
+    # Create arrows from moves if provided
+    arrows = []
+    if colored_moves:
+        arrows = [
+            chess.svg.Arrow(move.from_square, move.to_square, color=color)
+            for move, color in colored_moves
+        ]
+    
+    # Create custom colors dictionary to handle arbitrary arrow colors
+    colors = ChessColors()
+    
+    # Render chess board with arrows
+    svg_data = chess.svg.board(
+        board=board, 
+        lastmove=last_move,
+        arrows=arrows,
+        colors=colors
+    ).encode('UTF-8')
+    
     png_data = cairosvg.svg2png(bytestring=svg_data)
     image = Image.open(io.BytesIO(png_data))
     py_image = pygame.image.fromstring(image.tobytes(), image.size, image.mode)
@@ -189,7 +209,11 @@ def play_game(
                 if new_messages:
                     collected_messages.extend(new_messages)
                 
-                # Render current state
+                # Get current vote distribution for visualization
+                current_votes = vote_parser.parse_all_votes(collected_messages)
+                colored_moves = vote_parser.get_colored_moves(current_votes.values())
+                
+                # Render current state with vote visualization
                 render_game_state(
                     screen=screen,
                     board=board,
@@ -197,7 +221,8 @@ def play_game(
                     vote_time=vote_time,
                     voting_method=voting_method,
                     difficulty=difficulty,
-                    last_move=last_move
+                    last_move=last_move,
+                    colored_moves=colored_moves
                 )
                 
                 # Small sleep to prevent excessive CPU usage

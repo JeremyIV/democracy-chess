@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Tuple, List
 import chess
 import re
 from math import sqrt
@@ -114,3 +114,55 @@ class QuadraticVoteParser(VoteParser):
         # If there's a tie, use the first move in UCI notation order
         # This ensures deterministic behavior
         return min(winning_moves, key=lambda m: m.uci())
+    
+    def get_colored_moves(self, votes: Iterable[Dict[chess.Move, float]]) -> List[Tuple[chess.Move, str]]:
+        """
+        Generate colored arrows where opacity scales with the total normalized weight
+        each move received. Moves with negative total weights are excluded.
+        
+        Args:
+            votes: Iterable of dictionaries mapping chess.Move objects to normalized weights
+            
+        Returns:
+            List of tuples containing moves and their color codes. Colors are red
+            with opacity proportional to the total normalized weight received.
+            Moves with negative total weights are excluded.
+        """
+        # Aggregate weights for each move
+        total_weights: Dict[chess.Move, float] = {}
+        
+        for vote in votes:
+            for move, weight in vote.items():
+                if move in total_weights:
+                    total_weights[move] += weight
+                else:
+                    total_weights[move] = weight
+                    
+        if not total_weights:
+            return []
+            
+        # Filter out moves with negative weights
+        positive_weights = {move: weight for move, weight in total_weights.items() if weight > 0}
+        
+        if not positive_weights:
+            return []
+            
+        # Find the maximum weight to normalize opacity
+        max_weight = max(positive_weights.values())
+        
+        # The default chess.svg red arrow color is #882020
+        base_color = "#882020"
+        
+        # Create a move-color tuple for each positively voted move
+        colored_moves = []
+        for move, weight in positive_weights.items():
+            # Calculate opacity (00-FF) based on proportion of max weight
+            opacity = int(255 * (weight / max_weight))
+            hex_opacity = f"{opacity:02x}"
+            
+            # Combine base color with calculated opacity
+            color = f"{base_color}{hex_opacity}"
+            
+            colored_moves.append((move, color))
+            
+        return colored_moves

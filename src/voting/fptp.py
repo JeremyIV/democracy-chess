@@ -1,6 +1,6 @@
 from voting.vote_parser import VoteParser
 import chess
-from typing import Iterable
+from typing import Iterable, List, Tuple
 from collections import Counter
 
 class FPTPVoteParser(VoteParser):
@@ -61,6 +61,45 @@ class FPTPVoteParser(VoteParser):
         # In case of a tie, take the first move that reached the winning count
         # We can do this because Counter maintains insertion order
         return winning_moves[0]
+
+    def get_colored_moves(self, votes: Iterable[chess.Move]) -> List[Tuple[chess.Move, str]]:
+        """
+        Generate a list of moves and their associated colors for visualization.
+        For FPTP, we use red arrows with opacity proportional to vote share.
+        
+        Args:
+            votes: Iterable of chess.Move objects
+            
+        Returns:
+            List of tuples containing moves and their color codes. Colors are red
+            with opacity proportional to the fraction of votes received.
+        """
+        vote_counts = Counter(votes)
+        if not vote_counts:
+            return []
+            
+        # Get the total number of votes
+        total_votes = sum(vote_counts.values())
+        
+        # The default chess.svg red arrow color is #88202080
+        # We'll keep the same red color but vary the opacity based on vote share
+        base_color = "#882020"
+        
+        # Create a move-color tuple for each voted move
+        colored_moves = []
+        for move, count in vote_counts.items():
+            # Calculate opacity (00-FF) based on vote proportion
+            # Scale directly from 0% to 100% opacity
+            vote_fraction = count / total_votes
+            opacity = int(255 * vote_fraction)
+            hex_opacity = f"{opacity:02x}"
+            
+            # Combine base color with calculated opacity
+            color = f"{base_color}{hex_opacity}"
+            
+            colored_moves.append((move, color))
+            
+        return colored_moves
 
     def get_vote_counts(self, votes: Iterable[chess.Move]) -> dict[chess.Move, int]:
         """

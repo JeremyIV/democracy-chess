@@ -73,6 +73,23 @@ class VoteParser(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_colored_moves(self, votes: Iterable[V]) -> List[Tuple[chess.Move, str]]:
+        """
+        Generate a list of moves and their associated colors for visualization.
+        This can be used to show vote distributions, rankings, or other 
+        voting-method-specific information.
+        
+        Args:
+            votes: Iterable of parsed votes
+            
+        Returns:
+            List of tuples, each containing a chess.Move and a color string 
+            in hex format with optional opacity (e.g., "#ff000080" for 
+            semi-transparent red)
+        """
+        pass
+
     def get_winning_move(self, comments: List[Tuple[str, str]]) -> chess.Move:
         """
         Convenience method that combines parsing and resolution.
