@@ -91,7 +91,7 @@ class ApprovalVoteParser(VoteParser):
         approval_counts = Counter(all_votes)
         
         # Find the maximum approval count for scaling
-        max_approvals = max(approval_counts.values())
+        max_approvals = sum(approval_counts.values())
         
         # The default chess.svg red arrow color is #882020
         base_color = "#882020"

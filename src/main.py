@@ -33,7 +33,7 @@ VOTING_METHODS = {
     'quadratic': QuadraticVoteParser
 }
 
-VotingMethod = Literal['fptp', 'approval', 'runoff']
+VotingMethod = Literal['fptp', 'approval', 'runoff', 'quadratic']
 
 def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
     """
@@ -46,7 +46,8 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
         Tuple of (voting_method, difficulty_level)
     """
     # Randomly choose next voting method
-    voting_method = random.choice(list(VOTING_METHODS.keys())) # TODO uncomment
+    #voting_method = random.choice(list(VOTING_METHODS.keys())) # TODO uncomment
+    voting_method = "quadratic"
 
     # Get info about the last game with this voting method
     last_game_info = get_last_game_info(log_dir, voting_method)
@@ -256,6 +257,9 @@ def play_game(
                 
                 # Get colored moves for visualization
                 colored_moves = vote_parser.get_colored_moves(current_votes.values())
+                print("COLORED MOVES -----------------------------------------")
+                print(colored_moves)
+                print("-------------------------------------------------------")
                 
                 # Render current state with vote visualization
                 render_game_state(

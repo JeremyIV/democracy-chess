@@ -148,7 +148,7 @@ class QuadraticVoteParser(VoteParser):
             return []
             
         # Find the maximum weight to normalize opacity
-        max_weight = max(positive_weights.values())
+        max_weight = sum(positive_weights.values())
         
         # The default chess.svg red arrow color is #882020
         base_color = "#882020"
@@ -162,6 +162,10 @@ class QuadraticVoteParser(VoteParser):
             
             # Combine base color with calculated opacity
             color = f"{base_color}{hex_opacity}"
+            print(weight / max_weight)
+            print(opacity)
+            print(hex_opacity)
+            print(color)
             
             colored_moves.append((move, color))
             
