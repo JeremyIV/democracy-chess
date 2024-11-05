@@ -1,3 +1,7 @@
+import chess.svg
+from typing import Dict, Tuple
+# this is an ugly hack which allows us to set arrows to any color in the chess svg library.
+
 class ChessColors(dict):
     """
     A custom dictionary class for chess.svg.board() that allows using arbitrary arrow colors
@@ -63,3 +67,9 @@ class ChessColors(dict):
             return self[key]
         except KeyError:
             return default
+
+def new_select_color(colors: Dict[str, str], color: str) -> Tuple[str, float]:
+    return chess.svg._color(colors[color] if color in colors else chess.svg.DEFAULT_COLORS[color])
+
+# monkey patch the chess library to handle this new logic
+chess.svg._select_color = new_select_color
