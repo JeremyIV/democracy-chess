@@ -23,6 +23,7 @@ from mock_twitch import MockTwitchChat
 from mock_stockfish import MockStockfish
 from game_logger import GameLogger, get_last_game_info
 from stockfish_wrapper import create_engine, DIFFICULTY_LEVELS
+from parse_next_wait import get_next_and_waiting_users
 
 # Define valid voting methods
 VOTING_METHODS = {
@@ -75,6 +76,8 @@ def render_game_state(
     difficulty: int,
     last_move: Optional[chess.Move] = None,
     colored_moves: Optional[List[Tuple[chess.Move, str]]] = None,
+    num_next_users: int = 0,
+    num_wait_users: int = 0,
 ) -> None:
     """
     Render the current game state including chess board and timer.
@@ -88,6 +91,8 @@ def render_game_state(
         difficulty: Current difficulty level
         last_move: The last move made on the board (optional)
         colored_moves: List of (Move, color_code) tuples, where color_code is like "#00308880"
+        num_next_users: Number of users voting to skip to next move
+        num_wait_users: Number of users voting to wait
     """
     # Clear screen
     screen.fill((255, 255, 255))
@@ -124,7 +129,7 @@ def render_game_state(
     time_text = font.render(f"Next Move: {int(time_remaining)}", True, (0, 0, 0))
     screen.blit(time_text, (820, 50))
     
-    # Progress bar
+    # Timer Progress bar
     progress_height = 20
     progress_width = 200
     progress_x = 820
@@ -137,18 +142,37 @@ def render_game_state(
     fill_width = int((time_remaining / vote_time) * progress_width)
     pygame.draw.rect(screen, (0, 255, 0), (progress_x, progress_y, fill_width, progress_height))
     
+    # Next/Wait vote counter and progress bar
+    next_text = font.render(f"Next move? {num_next_users}/{num_wait_users}", True, (0, 0, 0))
+    screen.blit(next_text, (820, 140))
+    
+    # Next/Wait progress bar
+    next_progress_y = 180
+    
+    # Draw progress bar background
+    pygame.draw.rect(screen, (200, 200, 200), (progress_x, next_progress_y, progress_width, progress_height))
+    
+    # Draw progress bar fill - clip ratio to maximum of 1
+    if num_wait_users > 0:
+        ratio = min(1.0, num_next_users / num_wait_users)
+    else:
+        ratio = 1.0 if num_next_users > 0 else 0.0
+        
+    fill_width = int(ratio * progress_width)
+    pygame.draw.rect(screen, (0, 128, 255), (progress_x, next_progress_y, fill_width, progress_height))
+    
     # Voting method info
     method_label = font.render("Voting:", True, (0, 0, 0))
     method_text = font.render(voting_method.upper(), True, (0, 0, 0))
-    screen.blit(method_label, (820, 200))
-    screen.blit(method_text, (820, 250))
+    screen.blit(method_label, (820, 250))
+    screen.blit(method_text, (820, 300))
 
-    # Difficuly level
+    # Difficulty level
     difficulty_name = DIFFICULTY_LEVELS[difficulty].name
     method_label = font.render(f"Difficulty: {difficulty}", True, (0, 0, 0))
     method_text = font.render(difficulty_name, True, (0, 0, 0))
-    screen.blit(method_label, (820, 350))
-    screen.blit(method_text, (820, 400))
+    screen.blit(method_label, (820, 400))
+    screen.blit(method_text, (820, 450))
     
     pygame.display.flip()
 
@@ -166,6 +190,7 @@ def play_game(
 ) -> None:
     """
     Play a single game of Democracy Chess.
+    Now includes a next/wait voting system where users can vote to skip to next move.
     
     Args:
         [Previous args documentation remains the same...]
@@ -188,8 +213,10 @@ def play_game(
             
             vote_start_time = time.time()
             collected_messages = []
+            current_votes = {}
             
             # Voting period loop
+            next_users, waiting_users = set(), set()
             while True:
                 current_time = time.time()
                 elapsed_time = current_time - vote_start_time
@@ -208,9 +235,26 @@ def play_game(
                 new_messages = twitch_chat.get_chat()
                 if new_messages:
                     collected_messages.extend(new_messages)
+                    
+                    # Get current vote distribution and move voters
+                    current_votes = vote_parser.parse_all_votes(collected_messages)
+                    move_voters = set(current_votes.keys())
+                    
+                    # Get next/wait preferences
+                    next_users, waiting_users = get_next_and_waiting_users(collected_messages)
+                    
+                    # Add move voters to waiting set if they haven't explicitly voted next/wait
+                    for voter in move_voters:
+                        if voter not in next_users:
+                            waiting_users.add(voter)
+                    
+                    # Check if we should skip to next move
+                    # Only allow skip after 2 seconds and if there are more next votes than wait votes
+                    if elapsed_time > 2 and len(next_users) > len(waiting_users):
+                        print(f"Skipping to next move: {len(next_users)} next votes vs {len(waiting_users)} wait votes")
+                        break
                 
-                # Get current vote distribution for visualization
-                current_votes = vote_parser.parse_all_votes(collected_messages)
+                # Get colored moves for visualization
                 colored_moves = vote_parser.get_colored_moves(current_votes.values())
                 
                 # Render current state with vote visualization
@@ -222,7 +266,9 @@ def play_game(
                     voting_method=voting_method,
                     difficulty=difficulty,
                     last_move=last_move,
-                    colored_moves=colored_moves
+                    colored_moves=colored_moves,
+                    num_next_users=len(next_users),
+                    num_wait_users=len(waiting_users),
                 )
                 
                 # Small sleep to prevent excessive CPU usage
@@ -275,7 +321,6 @@ def play_game(
 
     finally:
         engine.quit()
-
 def main():
     parser = argparse.ArgumentParser(description='Democracy Chess - Chess played by Twitch chat')
     parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
