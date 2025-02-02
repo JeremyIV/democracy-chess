@@ -330,7 +330,7 @@ def main():
     parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
     parser.add_argument('--mock-chat-path', default='mock/chat.csv', help='Path to mock chat CSV file')
     parser.add_argument('--mock-stockfish-path', default='mock/stockfish.csv', help='Path to mock Stockfish CSV file')
-    parser.add_argument('--vote-time', type=int, default=30, help='Seconds to wait for votes')
+    parser.add_argument('--vote-time', type=int, default=60, help='Seconds to wait for votes')
     parser.add_argument('--log-dir', default='logs', help='Directory to store game logs')
     args = parser.parse_args()
 
@@ -340,6 +340,7 @@ def main():
         twitch_chat = create_twitch_chat()
 
     pygame.init()
+    pygame.mouse.set_visible(False)
     # Increased window width to accommodate timer and info panel
     screen = pygame.display.set_mode((1100, 800))
 
