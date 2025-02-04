@@ -70,6 +70,12 @@ You can write moves in either:
   - Kingside castle: `e1g1` (white) or `e8g8` (black)
   - Queenside castle: `e1c1` (white) or `e8c8` (black)
 
+## Special Commands
+
+- To vote to resign, simply say `resign`.
+- To skip the current countdown timer and count the votes immediately, enter say `n` or `next`.
+- If you're not ready to skip the countdown timer yet, you can say `w` or `wait`.
+
 ## Examples
 
 Here are some example scenarios:
