@@ -1,6 +1,6 @@
 # 🏛️ Democracy Chess ♟️
 
-🏛️ Democracy Chess ♟️ is a Twitch integration that lets chat play chess against Stockfish by voting on moves. Every 30 seconds, the chat's votes are tallied and the most popular legal move is played.
+🏛️ Democracy Chess ♟️ is a Twitch integration that lets chat play chess against Stockfish by voting on moves. Every 60 seconds, the chat's votes are tallied and the most popular legal move is played.
 
 ## Setup
 

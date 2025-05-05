@@ -1,6 +1,6 @@
 # How to Play 🏛️ Democracy Chess ♟️
 
-Democracy Chess is a collaborative chess game where Twitch chat plays against a chess engine. Every 30 seconds, all votes are tallied and the most popular legal move is played.
+Democracy Chess is a collaborative chess game where Twitch chat plays against a chess engine. Every 60 seconds, all votes are tallied and the most popular legal move is played.
 
 ## How to Vote
 
@@ -69,6 +69,12 @@ You can write moves in either:
 - Castling is written as the king's movement:
   - Kingside castle: `e1g1` (white) or `e8g8` (black)
   - Queenside castle: `e1c1` (white) or `e8c8` (black)
+
+## Special Commands
+
+- To vote to resign, simply say `resign`.
+- To skip the current countdown timer and count the votes immediately, enter say `n` or `next`.
+- If you're not ready to skip the countdown timer yet, you can say `w` or `wait`.
 
 ## Examples
 
