@@ -121,6 +121,10 @@ class VoteParser(ABC):
         """
         # Strip whitespace and standardize format
         clean_move = move_str.strip()
+
+        # handle votes for resignation
+        if clean_move.lower() == 'resign':
+            return 'resign'
         
         # Try parsing as UCI notation first
         try:

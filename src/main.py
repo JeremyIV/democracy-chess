@@ -46,8 +46,8 @@ def determine_next_game_params(log_dir: str) -> Tuple[VotingMethod, int]:
         Tuple of (voting_method, difficulty_level)
     """
     # Randomly choose next voting method
-    #voting_method = random.choice(list(VOTING_METHODS.keys())) # TODO uncomment
-    voting_method = "quadratic"
+    voting_method = random.choice(list(VOTING_METHODS.keys()))
+    #voting_method = "quadratic"
 
     # Get info about the last game with this voting method
     last_game_info = get_last_game_info(log_dir, voting_method)
@@ -204,9 +204,12 @@ def play_game(
 
     last_move = None  # Track the last move
 
+
     try:
         turn_number = 1
         print(f"\nStarting game {game_number} with {voting_method.upper()} voting")
+
+        resigned = False
         
         while not board.is_game_over():
             print(f"\nGame {game_number}, Turn {turn_number} - Waiting {vote_time} seconds for votes...")
@@ -256,10 +259,10 @@ def play_game(
                         break
                 
                 # Get colored moves for visualization
-                colored_moves = vote_parser.get_colored_moves(current_votes.values())
-                print("COLORED MOVES -----------------------------------------")
-                print(colored_moves)
-                print("-------------------------------------------------------")
+                current_votes_without_resignation = dict(current_votes)
+                if 'resign' in current_votes_without_resignation:
+                    del current_votes_without_resignation['resign']
+                colored_moves = vote_parser.get_colored_moves(current_votes_without_resignation.values())
                 
                 # Render current state with vote visualization
                 render_game_state(
@@ -286,6 +289,10 @@ def play_game(
                 winning_move = vote_parser.get_winning_move(collected_messages)
                 print(f"\nVotes received from {len(collected_messages)} users")
                 print(f"Winning move: {winning_move.uci()}")
+
+                if winning_move == "resign":
+                    resigned = True
+                    break
 
                 # Make Twitch's move
                 board.push(winning_move)
@@ -318,13 +325,14 @@ def play_game(
         logger.log_outcome(outcome)
         
         print("\nGame Over!")
-        winner = "Twitch" if outcome.winner else "Stockfish" if outcome.winner is False else "Draw"
+        winner = "Twitch" if outcome.winner else "Stockfish" if (resigned or outcome.winner is False) else "Draw"
         print(f"Winner: {winner}")
         print(f"Termination: {outcome.termination.name}")
         print(f"Game log saved to: {logger.log_file}")
 
     finally:
         engine.quit()
+
 def main():
     parser = argparse.ArgumentParser(description='Democracy Chess - Chess played by Twitch chat')
     parser.add_argument('--mock', action='store_true', help='Use mock implementations instead of real APIs')
